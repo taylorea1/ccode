@@ -1,4 +1,4 @@
-void elemid(int ch) 
+void elemid (int ch) 
 {
     TFile *f = TFile::Open("/home/amarit/rootdisplay/genrp_replayed_1071_20k_events.root");
 //If it cannot open the file or if the file is corrupted, it will print an error message and return.
@@ -15,7 +15,6 @@ void elemid(int ch)
     cout << "Entries = " << T->GetEntries() << endl;
 
 //Inserting a number to pick a specific channel to display the histogram for that channel.
-    
         cout << "Processing channel " << ch << endl;
 
         // Create a scatter plot graph for this channel
