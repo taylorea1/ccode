@@ -91,6 +91,9 @@ void thresholdadc(int targetCol, int targetRow, double threshold)
     // Number of hits in the event
     T->SetBranchAddress("Ndata.sbs.activeAna_adc.adcrow", &Ndata);
 
+    TH1D *h = new TH1D(Form("h_r%d_c%d", targetRow, targetCol),
+                   Form("ADC Amplitude Row %d Column %d;ADC", targetRow, targetCol),
+                   100, 0, 1000);
 
     TGraph *g = new TGraph();
     int point = 0;
@@ -116,7 +119,9 @@ void thresholdadc(int targetCol, int targetRow, double threshold)
 
             // x = event number
             // y = ADC amplitude
-            g->SetPoint(point++, i, amp[j]);
+            h->Fill(amp[j]);
+            g->SetPoint(point, i, amp[j]);
+            point++;
         }
     }
 
@@ -131,7 +136,7 @@ void thresholdadc(int targetCol, int targetRow, double threshold)
     }
 
 
-   TCanvas *c = new TCanvas("c","ADC Scatter",900,600);
+TCanvas *c = new TCanvas("c","ADC Scatter",900,600);
 
 g->SetTitle(Form("ADC Scatter Row %d Column %d;Event Number;ADC",
                  targetCol,targetRow));
@@ -155,4 +160,10 @@ leg->SetBorderSize(0);
 leg->Draw();
 
     c->SaveAs(Form("scatter_r%d_c%d.png",targetCol,targetRow));
+
+    TCanvas *c2 = new TCanvas("c2","ADC Histogram",900,600);
+    c2->SetLogy();
+    h->Draw();
+    c2->SaveAs(Form("histogram_r%d_c%d.png",targetCol,targetRow));
+    
 }

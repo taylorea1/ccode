@@ -1,11 +1,5 @@
-void thresholdtdc(int targetCol, int targetRow, double threshold)
+void thresholdtdc(double threshold)
 {
-    if (targetRow < 0 || targetRow > 3 ||
-        targetCol < 0 || targetCol > 7) {
-        cout << "Invalid channel. Rows: 0-3, Columns: 0-7" << endl;
-        return;
-    }
-
     TFile *f = TFile::Open("/home/amarit/rootdisplay/genrp_replayed_1071_20k_events.root");
 
     if (!f || f->IsZombie()) {
@@ -20,76 +14,151 @@ void thresholdtdc(int targetCol, int targetRow, double threshold)
         return;
     }
 
-    Double_t row[1000];
-    Double_t col[1000];
+
+    Double_t tdcrow[1000];
+    Double_t tdccol[1000];
     Double_t tdc[1000];
     Int_t Ndata;
 
-    T->SetBranchAddress("sbs.activeAna_adc.adcrow", row);
-    T->SetBranchAddress("sbs.activeAna_adc.adccol", col);
+
     T->SetBranchAddress("sbs.activeAna_tdc.tdc", tdc);
+    T->SetBranchAddress("sbs.activeAna_tdc.tdcrow", tdcrow);
+    T->SetBranchAddress("sbs.activeAna_tdc.tdccol", tdccol);
     T->SetBranchAddress("Ndata.sbs.activeAna_tdc.tdcrow", &Ndata);
 
 
- TGraph *g = new TGraph();
-    int point = 0;
+    // Total TDC hits per channel
+    TH1D *h_channel = new TH1D(
+        "h_channel",
+        "TDC Hits Per Channel;Channel (row*4+col);Total TDC Hits",
+        32,
+        -1.5,
+        31.5
+    );
+
+
+    // Multiplicity distribution (hits per event across detector)
+    TH1D *h_mult = new TH1D(
+        "h_mult",
+        "TDC Multiplicity Per Event;Number of TDC hits;Events",
+        60,
+        -0.5,
+        59.5
+    );
+
 
     Long64_t nentries = T->GetEntries();
+
+    int totalHits = 0;
+    int eventsWithHit = 0;
+
 
     for (Long64_t i = 0; i < nentries; i++) {
 
         T->GetEntry(i);
 
-        for (int j = 0; j < Ndata; j++) {
+        int eventHits = 0;
 
-            // Select ONLY this row and column
-            if ((int)col[j] != targetCol)
+
+        for (int t = 0; t < Ndata; t++) {
+
+
+            // Apply TDC threshold
+            if (tdc[t] < threshold)
                 continue;
 
-            if ((int)row[j] != targetRow)
+
+            int row = (int)tdcrow[t];
+            int col = (int)tdccol[t];
+
+
+            // Ignore invalid channels
+            if (row < 0 || row > 7)
                 continue;
 
-            // TDC threshold cut
-            if (tdc[j] < threshold)
+            if (col < 0 || col > 3)
                 continue;
 
-            // x = event number
-            // y = TDC amplitude
-            g->SetPoint(point++, i, tdc[j]);
+
+            int channel = row*4 + col;
+
+
+            // Count hit for this channel
+            h_channel->Fill(channel);
+
+
+            totalHits++;
+            eventHits++;
+
         }
+
+
+        if (eventHits > 0)
+            eventsWithHit++;
+
+
+        h_mult->Fill(eventHits);
+
     }
 
-    cout << "Row " << targetRow
-         << " Column " << targetCol
-         << " Hits found: " << point << endl;
+
+    cout << "==============================" << endl;
+    cout << "Total events: " << nentries << endl;
+    cout << "Events with TDC hits: " << eventsWithHit << endl;
+    cout << "Total TDC hits: " << totalHits << endl;
+    cout << "==============================" << endl;
 
 
-    if (point == 0) {
-        cout << "No hits passed the threshold." << endl;
-        return;
+
+    // Save channel hit counts to CSV
+    ofstream outfile("tdc_channel_counts.csv");
+
+    outfile << "Channel,Row,Column,Hits\n";
+
+    cout << "\nChannel hit counts:\n";
+
+    for (int c = 0; c < 32; c++) {
+
+        int row = c / 4;
+        int col = c % 4;
+
+        double hits = h_channel->GetBinContent(c+1);
+
+
+        cout << "Channel "
+             << c
+             << "  Row=" << row
+             << "  Col=" << col
+             << "  Hits=" << hits
+             << endl;
+
+
+        outfile << c << ","
+                << row << ","
+                << col << ","
+                << hits << "\n";
     }
 
+    outfile.close();
 
-   TCanvas *c = new TCanvas("c","TDC Scatter",900,600);
+    cout << "Saved channel counts to tdc_channel_counts.csv" << endl;
 
-g->SetTitle(Form("TDC Scatter Row %d Column %d;Event Number;TDC",
-                 targetCol,targetRow));
 
-g->SetMarkerStyle(20);
-g->SetMarkerColor(kBlue);
 
-g->Draw("AP");
+    // Draw channel hit distribution
+    TCanvas *c1 = new TCanvas("c1","TDC Hits Per Channel",900,600);
 
-TLegend *leg = new TLegend(0.65,0.75,0.88,0.88);
+    h_channel->Draw("hist");
 
-// leg->AddEntry(g,
-//               Form("Column %d Row %d",targetCol,targetRow),
-//               "p");
+    c1->SaveAs("tdc_hits_all_channels.pdf");
 
-leg->AddEntry((TObject*)0, Form("Hits = %d", point), "");
 
-leg->SetBorderSize(0);
-leg->Draw();
 
-c->SaveAs(Form("tdc_scatter_r%d_c%d.png", targetCol, targetRow));
-}   
+    // Draw multiplicity distribution
+    TCanvas *c2 = new TCanvas("c2","Multiplicity",900,600);
+
+    h_mult->Draw("hist");
+
+    c2->SaveAs("tdc_multiplicity_all_channels.pdf");
+
+}
